@@ -1,0 +1,81 @@
+import os, sys
+import subprocess
+import paramiko
+import argparse
+
+
+OK = 0
+Warning = 1
+Critical  =2 
+Unknown = 3
+
+def get_args():
+  parser = argparse.ArgumentParser(description="test")
+  parser.add_argument('-i', '--ipaddr', help="ipaddress of remote AIX host", dest='ipaddr', action='store', type=str)
+  parser.add_argument('-d', '--disk', help="Disk partition to check", default='/', type=str, dest='disk', action='store')
+  parser.add_argument('-u','--user', dest='user' ,default='icinga', help="remoe user to connect to", action='store', type=str)
+  args = parser.parse_args()
+  return args
+
+args = get_args()
+ipaddr = args.ipaddr
+disk = args.disk
+user = args.user
+port = '22'
+command = 'ls -ltr' + disk
+password = 'abcd123'
+
+
+def exec_remote_cmd(ipaddr,command, user, password, port=22, sudo=False):
+  client=paramiko.SSHClient()
+  client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+  client.connect(ipaddr,user,password,port)
+  stdin, stdout, stderr = client.exec_command(command,timeout=60)
+  command_output = stdout.strip().split('\n')
+  client.close()
+  return command_output
+
+def get_disk_rw():
+    """
+    Get the disk reads and writes
+    """
+    command = "cat /proc/partitions | grep -v 'major' | awk '{print $4}'"
+    command1 = "cat /proc/diskstats | grep -w '" + i + "'|awk '{print $4, $8}'"
+    try:
+        data = exec_remote_cmd(ipaddr,command, user, password)
+
+        rws = []
+        for i in data:
+            if i.isalpha():
+                rw = exec_remote_cmd(ipaddr,command1, user, password)
+                
+                rws.append([i, rw[0], rw[1]])
+
+        if not rws:
+            pipe = os.popen("cat /proc/diskstats | grep -w '" + data[0] + "'|awk '{print $4, $8}'")
+            rw = pipe.read().strip().split()
+            pipe.close()
+
+            rws.append([data[0], rw[0], rw[1]])
+
+        data = rws
+
+    except Exception as err:
+        data = str(err)
+
+    return data
+
+
+
+
+def main():
+  output = exec_remote_cmd(ipaddr, command, port, user,password)
+  print("No error found in the program" + output)
+  
+
+
+
+if __name__=="__main__":
+  main()
+
+
