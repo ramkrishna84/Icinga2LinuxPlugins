@@ -2,12 +2,14 @@ import os, sys
 import subprocess
 import paramiko
 import argparse
+import cred
 
 
 OK = 0
 Warning = 1
-Critical  =2 
+Critical  =2
 Unknown = 3
+
 
 def get_args():
   parser = argparse.ArgumentParser(description="test")
@@ -17,19 +19,19 @@ def get_args():
   args = parser.parse_args()
   return args
 
+
 args = get_args()
 ipaddr = args.ipaddr
 disk = args.disk
 user = args.user
 port = '22'
-command = 'ls -ltr' + disk
-password = 'abcd123'
+password = cred.get_passwd(ipaddr)
 
 
 def exec_remote_cmd(ipaddr,command, user, password, port=22, sudo=False):
   client=paramiko.SSHClient()
   client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-  client.connect(ipaddr,user,password,port)
+  client.connect(ipaddr,port=port,username=user,password=password)
   stdin, stdout, stderr = client.exec_command(command,timeout=60)
   command_output = stdout.strip().split('\n')
   client.close()
@@ -40,21 +42,21 @@ def get_disk_rw():
     Get the disk reads and writes
     """
     command = "cat /proc/partitions | grep -v 'major' | awk '{print $4}'"
-    command1 = "cat /proc/diskstats | grep -w '" + i + "'|awk '{print $4, $8}'"
+    
     try:
         data = exec_remote_cmd(ipaddr,command, user, password)
 
         rws = []
         for i in data:
             if i.isalpha():
+                command1 = "cat /proc/diskstats | grep -w '" + i + "'|awk '{print $4, $8}'"
                 rw = exec_remote_cmd(ipaddr,command1, user, password)
-                
+
                 rws.append([i, rw[0], rw[1]])
 
-        if not rws:
-            pipe = os.popen("cat /proc/diskstats | grep -w '" + data[0] + "'|awk '{print $4, $8}'")
-            rw = pipe.read().strip().split()
-            pipe.close()
+            if not rws:
+                command2 = "cat /proc/diskstats | grep -w '" + data[0] + "'|awk '{print $4, $8}'"
+                rw = exec_remote_cmd(ipaddr,command2, user, password)
 
             rws.append([data[0], rw[0], rw[1]])
 
@@ -69,13 +71,11 @@ def get_disk_rw():
 
 
 def main():
-  output = exec_remote_cmd(ipaddr, command, port, user,password)
+  output = get_disk_rw()
   print("No error found in the program" + output)
-  
+
 
 
 
 if __name__=="__main__":
   main()
-
-
